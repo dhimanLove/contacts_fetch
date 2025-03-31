@@ -24,3 +24,7 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+///  void callContact(String number) {
+//     final Uri uri = Uri(scheme: 'tel', path: number);
+//     launchUrl(uri);
+//   }

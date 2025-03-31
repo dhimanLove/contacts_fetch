@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:shimmer/shimmer.dart';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -12,42 +14,47 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   List<Contact> contacts = [];
   List<Contact> filteredContacts = [];
-  bool isLoading = true;
-  final TextEditingController _searchController = TextEditingController();
+  bool isLoading = false;
+  final TextEditingController searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode(); // Add a FocusNode
 
   @override
   void initState() {
     super.initState();
-    _getPermission();
-    _searchController.addListener(_filterContacts);
+    getPermission();
+    searchController.addListener(filterContacts);
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
+    searchController.dispose();
+    _searchFocus.dispose(); // Dispose the FocusNode
     super.dispose();
   }
 
-  void _getPermission() async {
+  Future<void> getPermission() async {
     if (await Permission.contacts.request().isGranted) {
-      _fetchContacts();
-    } else {
-      await openAppSettings();
+      await fetchContacts();
     }
   }
 
-  void _fetchContacts() async {
+  Future<void> fetchContacts() async {
+    if (isLoading) return;
     setState(() => isLoading = true);
-    if (await FlutterContacts.requestPermission()) {
-      contacts = await FlutterContacts.getContacts(withProperties: true);
-      contacts.sort((a, b) => a.displayName.compareTo(b.displayName));
-      filteredContacts = List.from(contacts);
-      setState(() => isLoading = false);
+    final permissionGranted = await FlutterContacts.requestPermission();
+    if (permissionGranted) {
+      final fetchedContacts = await FlutterContacts.getContacts(withProperties: true);
+      fetchedContacts.sort((a, b) => a.displayName.compareTo(b.displayName));
+      setState(() {
+        contacts = fetchedContacts;
+        filteredContacts = List.from(contacts);
+      });
     }
+    setState(() => isLoading = false);
   }
 
-  void _filterContacts() {
-    String query = _searchController.text.toLowerCase();
+  void filterContacts() {
+    final query = searchController.text.toLowerCase();
     setState(() {
       filteredContacts = contacts.where((contact) {
         final nameMatch = contact.displayName.toLowerCase().contains(query);
@@ -58,165 +65,161 @@ class _MyHomePageState extends State<MyHomePage> {
     });
   }
 
+  void callContact(String number) {
+    final Uri uri = Uri(scheme: 'tel', path: number);
+    launchUrl(uri);
+  }
+
+  void showContactInfoBottomSheet(Contact contact) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.grey[900],
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Hero(
+              tag: 'contact_avatar_${contact.id}',
+              child: CircleAvatar(
+                radius: 60,
+                backgroundColor: Colors.grey[800],
+                child: Text(
+                  contact.displayName.isNotEmpty ? contact.displayName[0].toUpperCase() : '?',
+                  style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              contact.displayName,
+              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w500),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            if (contact.phones.isNotEmpty)
+              ...contact.phones.map(
+                    (phone) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.phone, color: Colors.grey),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(phone.number, style: const TextStyle(color: Colors.white, fontSize: 16)),
+                            const Text("Mobile | India", style: TextStyle(color: Colors.grey, fontSize: 14)),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.call, color: Colors.green),
+                        onPressed: () => callContact(phone.number),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Contacts',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true,
-        elevation: 8,
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.deepPurple, Colors.purpleAccent],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
+      backgroundColor: Colors.grey[900],
+      body: RefreshIndicator(
+        onRefresh: fetchContacts,
+        color: Colors.white,
+        backgroundColor: Colors.grey[850],
+        strokeWidth: 2.5,
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            SliverAppBar(
+              title: const Text('Contacts', style: TextStyle(fontWeight: FontWeight.w600)),
+              backgroundColor: Colors.grey[900],
+              floating: true,
+              snap: true,
+              pinned: false,
+              elevation: 0,
             ),
-          ),
-        ),
-      ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: TextField(
-              controller: _searchController,
-              style: const TextStyle(fontSize: 18),
-              cursorColor: Colors.deepPurple,
-              cursorHeight: 25,
-              cursorWidth: 2,
-              textInputAction: TextInputAction.search,
-              textCapitalization: TextCapitalization.words,
-              textAlign: TextAlign.start,
-              textAlignVertical: TextAlignVertical.center,
-              keyboardType: TextInputType.text,
-              maxLines: 1,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search, color: Colors.deepPurple),
-                suffixIcon: _searchController.text.isNotEmpty
-                    ? IconButton(
-                  icon: const Icon(Icons.clear, color: Colors.deepPurple),
-                  onPressed: () {
-                    _searchController.clear();
-                    _filterContacts();
-                  },
-                )
-                    : null,
-                hintText: 'Search contacts...',
-                hintStyle: const TextStyle(color: Colors.deepPurple),
-                filled: true,
-                fillColor: Colors.deepPurple.withOpacity(0.08),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(30),
-                  borderSide: BorderSide.none,
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextField(
+                  controller: searchController,
+                  focusNode: _searchFocus, // Assign the FocusNode
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    hintText: 'Search contacts',
+                    hintStyle: TextStyle(color: Colors.grey[600]),
+                    prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
+                    suffixIcon: searchController.text.isNotEmpty
+                        ? IconButton(
+                      icon: const Icon(Icons.clear, color: Colors.grey),
+                      onPressed: () {
+                        searchController.clear();
+                        _searchFocus.unfocus(); // Unfocus the text field
+                      },
+                    )
+                        : null,
+                    filled: true,
+                    fillColor: Colors.grey[850],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  ),
                 ),
-                contentPadding: const EdgeInsets.symmetric(vertical: 15),
               ),
             ),
-          ),
-          Expanded(
-            child: isLoading
-                ? const Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple),
+            isLoading
+                ? SliverList(
+              delegate: SliverChildBuilderDelegate(
+                    (context, index) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Shimmer.fromColors(
+                    baseColor: Colors.grey[800]!,
+                    highlightColor: Colors.grey[700]!,
+                    child: Container(
+                      height: 70,
+                      decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+                childCount: 7,
               ),
             )
-                : filteredContacts.isEmpty
-                ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(
-                    Icons.contacts,
-                    size: 80,
-                    color: Colors.deepPurple,
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'No contacts found',
-                    style: TextStyle(fontSize: 18, color: Colors.grey),
-                  ),
-                ],
-              ),
-            )
-                : ListView.builder(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              itemCount: filteredContacts.length,
-              itemBuilder: (context, index) {
-                final contact = filteredContacts[index];
-                final firstLetter = contact.displayName.isNotEmpty
-                    ? contact.displayName[0].toUpperCase()
-                    : '?';
-                final showDivider = index == 0 ||
-                    firstLetter != filteredContacts[index - 1]
-                        .displayName[0].toUpperCase();
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (showDivider)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(15, 12, 15, 4),
-                        child: Text(
-                          firstLetter,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.deepPurple,
-                          ),
-                        ),
-                      ),
-                    Card(
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      elevation: 5,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
-                        leading: CircleAvatar(
-                          radius: 25,
-                          backgroundColor: Colors.deepPurple.withOpacity(0.1),
-                          child: Text(
-                            firstLetter,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.deepPurple,
-                            ),
-                          ),
-                        ),
-                        title: Text(
-                          contact.displayName,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                        ),
-                        subtitle: Text(
-                          contact.phones.isNotEmpty
-                              ? contact.phones[0].number
-                              : 'No phone number',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-
+                : SliverList(
+              delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                  final contact = filteredContacts[index];
+                  return ListTile(
+                    onTap: () => showContactInfoBottomSheet(contact),
+                    title: Text(contact.displayName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
+                    subtitle: contact.phones.isNotEmpty ? Text(contact.phones[0].number, style: TextStyle(color: Colors.grey[400])) : null,
+                    leading: Hero(
+                      tag: 'contact_avatar_${contact.id}',
+                      child: CircleAvatar(
+                        backgroundColor: Colors.grey[800],
+                        child: Text(contact.displayName[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                       ),
                     ),
-                  ],
-                );
-              },
+                    trailing: IconButton(
+                      icon: const Icon(Icons.phone, color: Colors.green),
+                      onPressed: () => callContact(contact.phones.isNotEmpty ? contact.phones[0].number : ''),
+                    ),
+                  );
+                },
+                childCount: filteredContacts.length,
+              ),
             ),
-          ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _fetchContacts,
-        backgroundColor: Colors.deepPurple,
-        child: const Icon(Icons.refresh),
-        tooltip: 'Refresh Contacts',
+          ],
+        ),
       ),
     );
   }
