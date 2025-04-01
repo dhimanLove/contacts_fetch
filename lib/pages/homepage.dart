@@ -3,6 +3,7 @@ import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:get/get.dart';
 
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
@@ -43,7 +44,8 @@ class _MyHomePageState extends State<MyHomePage> {
     setState(() => isLoading = true);
     final permissionGranted = await FlutterContacts.requestPermission();
     if (permissionGranted) {
-      final fetchedContacts = await FlutterContacts.getContacts(withProperties: true);
+      final fetchedContacts =
+          await FlutterContacts.getContacts(withProperties: true);
       fetchedContacts.sort((a, b) => a.displayName.compareTo(b.displayName));
       setState(() {
         contacts = fetchedContacts;
@@ -70,13 +72,16 @@ class _MyHomePageState extends State<MyHomePage> {
     launchUrl(uri);
   }
 
-  void showContactInfoBottomSheet(Contact contact) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.grey[900],
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => Padding(
+  void showContactBottomSheet(Contact contact) {
+    Get.bottomSheet(
+      Container(
+        height: Get.height * 1 / 2,
+        width: Get.width,
         padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.black87,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -85,39 +90,60 @@ class _MyHomePageState extends State<MyHomePage> {
               tag: 'contact_avatar_${contact.id}',
               child: CircleAvatar(
                 radius: 60,
-                backgroundColor: Colors.grey[800],
+                backgroundColor: Colors.grey[850],
                 child: Text(
-                  contact.displayName.isNotEmpty ? contact.displayName[0].toUpperCase() : '?',
-                  style: const TextStyle(color: Colors.white, fontSize: 36, fontWeight: FontWeight.w600),
+                  contact.displayName.isNotEmpty
+                      ? contact.displayName[0].toUpperCase()
+                      : '?',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 36,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             Text(
               contact.displayName,
-              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w500),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 22,
+                fontWeight: FontWeight.w600,
+              ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
             if (contact.phones.isNotEmpty)
               ...contact.phones.map(
-                    (phone) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
+                (phone) => Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
                   child: Row(
                     children: [
-                      const Icon(Icons.phone, color: Colors.grey),
-                      const SizedBox(width: 16),
+                      const Icon(Icons.phone, color: Colors.blueAccent),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(phone.number, style: const TextStyle(color: Colors.white, fontSize: 16)),
-                            const Text("Mobile | India", style: TextStyle(color: Colors.grey, fontSize: 14)),
+                            Text(
+                              phone.number,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const Text(
+                              "Mobile | India",
+                              style:
+                                  TextStyle(color: Colors.grey, fontSize: 14),
+                            ),
                           ],
                         ),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.call, color: Colors.green),
+                        icon: const Icon(Icons.call, color: Colors.greenAccent),
                         onPressed: () => callContact(phone.number),
                       ),
                     ],
@@ -127,6 +153,8 @@ class _MyHomePageState extends State<MyHomePage> {
           ],
         ),
       ),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
     );
   }
 
@@ -137,13 +165,14 @@ class _MyHomePageState extends State<MyHomePage> {
       body: RefreshIndicator(
         onRefresh: fetchContacts,
         color: Colors.white,
-        backgroundColor: Colors.grey[850],
-        strokeWidth: 2.5,
+        backgroundColor: Colors.grey[700],
+        strokeWidth: 1.2,
         child: CustomScrollView(
           physics: const BouncingScrollPhysics(),
           slivers: [
             SliverAppBar(
-              title: const Text('Contacts', style: TextStyle(fontWeight: FontWeight.w600)),
+              title: const Text('Contacts',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
               backgroundColor: Colors.grey[900],
               floating: true,
               snap: true,
@@ -163,61 +192,78 @@ class _MyHomePageState extends State<MyHomePage> {
                     prefixIcon: Icon(Icons.search, color: Colors.grey[600]),
                     suffixIcon: searchController.text.isNotEmpty
                         ? IconButton(
-                      icon: const Icon(Icons.clear, color: Colors.grey),
-                      onPressed: () {
-                        searchController.clear();
-                        _searchFocus.unfocus(); // Unfocus the text field
-                      },
-                    )
+                            icon: const Icon(Icons.clear, color: Colors.grey),
+                            onPressed: () {
+                              searchController.clear();
+                              _searchFocus.unfocus(); // Unfocus the text field
+                            },
+                          )
                         : null,
                     filled: true,
                     fillColor: Colors.grey[850],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none),
                   ),
                 ),
               ),
             ),
             isLoading
                 ? SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, index) => Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Shimmer.fromColors(
-                    baseColor: Colors.grey[800]!,
-                    highlightColor: Colors.grey[700]!,
-                    child: Container(
-                      height: 70,
-                      decoration: BoxDecoration(color: Colors.grey[850], borderRadius: BorderRadius.circular(12)),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        child: Shimmer.fromColors(
+                          baseColor: Colors.grey[800]!,
+                          highlightColor: Colors.grey[700]!,
+                          child: Container(
+                            height: 70,
+                            decoration: BoxDecoration(
+                                color: Colors.grey[850],
+                                borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      childCount: 7,
+                    ),
+                  )
+                : SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final contact = filteredContacts[index];
+                        return ListTile(
+                          onTap: () => showContactBottomSheet(contact),
+                          title: Text(contact.displayName,
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w500)),
+                          subtitle: contact.phones.isNotEmpty
+                              ? Text(contact.phones[0].number,
+                                  style: TextStyle(color: Colors.grey[400]))
+                              : null,
+                          leading: Hero(
+                            tag: 'contact_avatar_${contact.id}',
+                            child: CircleAvatar(
+                              backgroundColor: Colors.grey[800],
+                              child: Text(contact.displayName[0].toUpperCase(),
+                                  style: const TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.phone, color: Colors.green),
+                            onPressed: () => callContact(
+                                contact.phones.isNotEmpty
+                                    ? contact.phones[0].number
+                                    : ''),
+                          ),
+                        );
+                      },
+                      childCount: filteredContacts.length,
                     ),
                   ),
-                ),
-                childCount: 7,
-              ),
-            )
-                : SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                  final contact = filteredContacts[index];
-                  return ListTile(
-                    onTap: () => showContactInfoBottomSheet(contact),
-                    title: Text(contact.displayName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500)),
-                    subtitle: contact.phones.isNotEmpty ? Text(contact.phones[0].number, style: TextStyle(color: Colors.grey[400])) : null,
-                    leading: Hero(
-                      tag: 'contact_avatar_${contact.id}',
-                      child: CircleAvatar(
-                        backgroundColor: Colors.grey[800],
-                        child: Text(contact.displayName[0].toUpperCase(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.phone, color: Colors.green),
-                      onPressed: () => callContact(contact.phones.isNotEmpty ? contact.phones[0].number : ''),
-                    ),
-                  );
-                },
-                childCount: filteredContacts.length,
-              ),
-            ),
           ],
         ),
       ),
